@@ -6,8 +6,32 @@ import pythoncom
 import win32com.client
 import subprocess
 
+
 SOFTWARE_VERSION = "v2.1"
-WORD_APP_VISIBLE = False
+WORD_APP_VISIBLE = False # 处理时是否显示WORD
+
+
+def kill_visio_processes():
+        """
+        杀死Visio进程，为了防止用户提前打开要使用的VISIO文件，导致报错VISIO无法重复打开
+        """
+        try:
+            
+            subprocess.run(["taskkill", "/F", "/IM", "visio.exe"], check=True)
+            print("所有Visio进程已终止。")
+        except subprocess.CalledProcessError as e:
+            print(f"终止Visio进程时出错: {e}")
+
+def kill_word_processes():
+    """
+    杀死所有Word进程，为了防止用户提前打开要使用的Word文件，导致报错Word无法重复打开
+    """
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "winword.exe"], check=True)
+        print("所有Word进程已终止。")
+    except subprocess.CalledProcessError as e:
+        print(f"终止Word进程时出错: {e}")
+
 
 class VisioConverterApp:
     def __init__(self, root):
@@ -32,17 +56,6 @@ class VisioConverterApp:
         style = ttk.Style()
         style.configure("TButton", padding=6)
         style.configure("TEntry", padding=6)
-
-    def kill_visio_processes(self):
-        """
-        杀死Visio进程，为了防止用户提前打开要使用的VISIO文件，导致报错VISIO无法重复打开
-        """
-        try:
-            
-            subprocess.run(["taskkill", "/F", "/IM", "visio.exe"], check=True)
-            print("所有Visio进程已终止。")
-        except subprocess.CalledProcessError as e:
-            print(f"终止Visio进程时出错: {e}")
 
     def create_widgets(self):
         # 目录选择区域
@@ -234,8 +247,11 @@ class VisioConverterApp:
         # 在转换开始前杀死所有Visio进程
 
         try:
-            self.kill_visio_processes()
+            kill_visio_processes()
+            kill_word_processes()
         except Exception as e:
+            # DEBUG
+            # raise e
             messagebox.showerror("错误", f"终止Visio进程时出错: {e}")
             return
 
@@ -321,7 +337,7 @@ class VisioConverterApp:
                 ],
             )
         except Exception as e:
-            # debug
+            # DEBUG
             # raise e
             error_msg = str(e)
             self.root.after(
@@ -363,6 +379,10 @@ def visio_to_word_copy_paste(
                 update_progress(filename, idx + 1, total_files)
 
             visio_file_path = os.path.join(visio_dir, filename)
+            # 路径格式化
+            visio_file_path = os.path.normpath(visio_file_path)
+            # DEBUG
+            # print(f"正在处理文件：{filename};文件路径：{visio_file_path}")
             visio_doc = visio_app.Documents.Open(visio_file_path)
 
             # 如果需要单独转换，为每个文件创建新文档
@@ -437,6 +457,8 @@ def visio_to_word_export_png(
                 update_progress(filename, idx + 1, total_files)
 
             visio_file_path = os.path.join(visio_dir, filename)
+            # 路径格式化
+            visio_file_path = os.path.normpath(visio_file_path)
             visio_doc = visio_app.Documents.Open(visio_file_path)
 
             if separate_files:
@@ -480,6 +502,7 @@ def visio_to_word_export_png(
     finally:
         pythoncom.CoUninitialize()
 
+
 def center_window(root, width, height):
     # 获取屏幕宽度和高度
     screen_width = root.winfo_screenwidth()
@@ -487,13 +510,10 @@ def center_window(root, width, height):
 
     # 计算窗口左上角的位置
     x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
+    y = (screen_height - height) // 2 - 60 # 调整y位置
 
     # 设置窗口大小和位置
     root.geometry(f"{width}x{height}+{x}+{y}")
-
-
-
 
 if __name__ == "__main__":
     # 在启动应用程序之前终止所有Visio进程
