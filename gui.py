@@ -2,38 +2,8 @@ import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
-import pythoncom
-import win32com.client
-import subprocess
-
-
-SOFTWARE_VERSION = "v2.2"
-WORD_APP_VISIBLE = False  # 处理时是否显示WORD应用
-
-
-def kill_visio_processes():
-    """杀死Visio进程以防止文件占用"""
-    try:
-        subprocess.run(["taskkill", "/F", "/IM", "visio.exe"], check=True)
-        print("所有Visio进程已终止。")
-    except subprocess.CalledProcessError as e:
-        print(f"终止Visio进程时出错: {e}")
-
-
-def kill_word_processes(word_processor="Word"):
-    """根据选择杀死Word或WPS进程"""
-    targets = (
-        ["winword.exe"]
-        if word_processor == "Word"
-        else ["wps.exe"]
-    )
-    try:
-        for proc in targets:
-            subprocess.run(["taskkill", "/F", "/IM", proc], check=False)  # 非严格模式
-        print(f"已终止{word_processor}相关进程")
-    except Exception as e:
-        print(f"进程终止异常: {e}")
-
+from config import SOFTWARE_VERSION
+from core import visio_to_word_copy_paste, visio_to_word_export_png, kill_visio_processes, kill_word_processes
 
 class VisioConverterApp:
     def __init__(self, root):
@@ -213,6 +183,8 @@ class VisioConverterApp:
         """选择目录并加载文件列表"""
         dir_path = filedialog.askdirectory()
         if dir_path:
+            # 规范化路径
+            dir_path = os.path.abspath(os.path.normpath(dir_path))
             self.selected_dir.set(dir_path)
             self.load_files(dir_path)
 
@@ -221,8 +193,12 @@ class VisioConverterApp:
         self.tree.delete(*self.tree.get_children())
         self.files_data.clear()
 
+        # 确保路径是绝对路径
+        dir_path = os.path.abspath(os.path.normpath(dir_path))
+        
         files = [
-            f for f in os.listdir(dir_path) if f.lower().endswith((".vsd", ".vsdx"))
+            f for f in os.listdir(dir_path) 
+            if f.lower().endswith((".vsd", ".vsdx")) and os.path.isfile(os.path.join(dir_path, f))
         ]
         files.sort()
 
@@ -272,6 +248,9 @@ class VisioConverterApp:
     def process_files(self, visio_dir, method, separate_files, word_processor):
         """处理文件的主逻辑"""
         try:
+            # 确保路径是绝对路径且规范化
+            visio_dir = os.path.abspath(os.path.normpath(visio_dir))
+            
             sorted_files = sorted(
                 [
                     (f, self.files_data[f])
@@ -314,9 +293,9 @@ class VisioConverterApp:
                     word_processor,
                 )
 
-            output_path = os.path.join(
+            output_path = os.path.abspath(os.path.join(
                 visio_dir, "Converted_Files" if separate_files else "output.docx"
-            )
+            ))
             self.root.after(
                 0,
                 lambda: [
@@ -338,163 +317,6 @@ class VisioConverterApp:
                 ],
             )
 
-
-def create_office_app(app_type):
-    """通用办公软件创建方法"""
-    if app_type == "Word":
-        return win32com.client.Dispatch("Word.Application")
-
-    # 尝试不同WPS版本
-    for prog_id in ["Kwps.Application", "Wps.Application"]:
-        try:
-            return win32com.client.Dispatch(prog_id)
-        except:
-            continue
-    raise Exception("无法启动WPS，请确认安装正确版本")
-
-
-def visio_to_word_copy_paste(
-    visio_dir,
-    file_list,
-    update_progress=None,
-    separate_files=False,
-    word_processor="Word",
-):
-    """使用复制粘贴方式转换Visio到Word/WPS"""
-    pythoncom.CoInitialize()
-    try:
-        visio_app = win32com.client.Dispatch("Visio.Application")
-        visio_app.Visible = False
-        output_dir = None
-
-        office_app = create_office_app(word_processor)
-        office_app.Visible = WORD_APP_VISIBLE
-
-        if not separate_files:
-            doc = office_app.Documents.Add()
-            office_app.Selection.EndKey(6)
-
-        total_files = len(file_list)
-        for idx, filename in enumerate(file_list):
-            if update_progress:
-                update_progress(filename, idx + 1, total_files)
-
-            visio_file_path = os.path.normpath(os.path.join(visio_dir, filename))
-            visio_doc = visio_app.Documents.Open(visio_file_path)
-
-            if separate_files:
-                current_doc = office_app.Documents.Add()
-                current_selection = office_app.Selection
-                current_selection.EndKey(6)
-            else:
-                current_doc = doc
-                current_selection = office_app.Selection
-
-            total_pages = visio_doc.Pages.Count
-            for i, page in enumerate(visio_doc.Pages):
-                visio_window = visio_app.ActiveWindow
-                visio_window.Page = page
-                visio_window.SelectAll()
-                visio_window.Selection.Copy()
-
-                range_end = current_doc.Content
-                range_end.Collapse(0)
-                range_end.Paste()
-
-                if i < total_pages - 1:
-                    range_end.InsertBreak(7)
-
-            visio_doc.Close()
-
-            if separate_files:
-                if separate_files:
-                    output_name = os.path.splitext(filename)[0] + ".docx"
-                    output_path = os.path.join(
-                        visio_dir, "Converted_Files", output_name
-                    )
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    current_doc.SaveAs(output_path)
-                    current_doc.Close()
-
-        if not separate_files:
-            output_word_path = os.path.join(visio_dir, "output.docx")
-            doc.SaveAs(output_word_path)
-        office_app.Quit()
-
-    finally:
-        pythoncom.CoUninitialize()
-
-
-def visio_to_word_export_png(
-    visio_dir,
-    file_list,
-    update_progress=None,
-    separate_files=False,
-    word_processor="Word",
-):
-    """使用导出PNG方式转换Visio到Word/WPS"""
-    pythoncom.CoInitialize()
-    try:
-        visio_app = win32com.client.Dispatch("Visio.Application")
-        visio_app.Visible = False
-
-        office_app = create_office_app(word_processor)
-        office_app.Visible = WORD_APP_VISIBLE
-
-        if not separate_files:
-            doc = office_app.Documents.Add()
-            office_app.Selection.EndKey(6)
-
-        total_files = len(file_list)
-        for idx, filename in enumerate(file_list):
-            if update_progress:
-                update_progress(filename, idx + 1, total_files)
-
-            visio_file_path = os.path.normpath(os.path.join(visio_dir, filename))
-            visio_doc = visio_app.Documents.Open(visio_file_path)
-
-            if separate_files:
-                current_doc = office_app.Documents.Add()
-                current_selection = office_app.Selection
-                current_selection.EndKey(6)
-            else:
-                current_doc = doc
-                current_selection = office_app.Selection
-
-            total_pages = visio_doc.Pages.Count
-            for i, page in enumerate(visio_doc.Pages):
-                temp_image_path = os.path.join(
-                    visio_dir, f"temp_{filename}_{i + 1}.png"
-                )
-                page.Export(temp_image_path)
-
-                range_end = current_doc.Content
-                range_end.Collapse(0)
-                range_end.InlineShapes.AddPicture(temp_image_path)
-
-                if i < total_pages - 1:
-                    range_end.InsertBreak(7)
-
-                os.remove(temp_image_path)
-
-            visio_doc.Close()
-
-            if separate_files:
-                output_name = os.path.splitext(filename)[0] + ".docx"
-                output_path = os.path.join(visio_dir, "Converted_Files", output_name)
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                current_doc.SaveAs(output_path)
-                current_doc.Close()
-
-        if not separate_files:
-            output_word_path = os.path.join(visio_dir, "output.docx")
-            doc.SaveAs(output_word_path)
-        office_app.Quit()
-
-    finally:
-        pythoncom.CoUninitialize()
-
-
 def center_window(root, width, height):
     """窗口居中显示"""
     screen_width = root.winfo_screenwidth()
@@ -502,7 +324,6 @@ def center_window(root, width, height):
     x = (screen_width - width) // 2
     y = (screen_height - height) // 2 - 60
     root.geometry(f"{width}x{height}+{x}+{y}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()

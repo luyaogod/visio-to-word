@@ -1,0 +1,2 @@
+SOFTWARE_VERSION = "v2.2"
+WORD_APP_VISIBLE = False  # 处理时是否显示WORD应用

@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['script.py'],
+    ['gui.py'],
     pathex=[],
     binaries=[],
     datas=[],
