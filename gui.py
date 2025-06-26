@@ -14,7 +14,7 @@ class VisioConverterApp:
         self.selected_dir = tk.StringVar()
         self.all_select_var = tk.BooleanVar(value=True)
         self.files_data = {}
-        self.conversion_method = tk.StringVar(value="copy_paste")
+        self.conversion_method = tk.StringVar(value="export_png")
         self.separate_files_var = tk.BooleanVar(value=False)
         self.word_processor = tk.StringVar(value="Word")  # 新增软件选择变量
 
@@ -32,7 +32,7 @@ class VisioConverterApp:
         dir_frame.pack(fill=tk.X)
 
         ttk.Label(dir_frame, text="目标目录:").pack(side=tk.LEFT)
-        ttk.Entry(dir_frame, textvariable=self.selected_dir, width=50).pack(
+        ttk.Entry(dir_frame, textvariable=self.selected_dir, width=50, state="readonly").pack(
             side=tk.LEFT, padx=5
         )
         ttk.Button(dir_frame, text="选择目录", command=self.select_directory).pack(
@@ -52,15 +52,15 @@ class VisioConverterApp:
         ttk.Label(method_frame, text="转换方式:").pack(side=tk.LEFT)
         ttk.Radiobutton(
             method_frame,
-            text="直接复制粘贴",
-            variable=self.conversion_method,
-            value="copy_paste",
-        ).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(
-            method_frame,
             text="导出PNG图片",
             variable=self.conversion_method,
             value="export_png",
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(
+            method_frame,
+            text="直接复制粘贴",
+            variable=self.conversion_method,
+            value="copy_paste",
         ).pack(side=tk.LEFT, padx=5)
         ttk.Checkbutton(
             method_frame, text="单独转换每个文件", variable=self.separate_files_var
@@ -94,7 +94,7 @@ class VisioConverterApp:
         ctrl_frame = ttk.Frame(self.root, padding=10)
         ctrl_frame.pack(fill=tk.X)
 
-        self.status_label = ttk.Label(ctrl_frame, text="就绪")
+        self.status_label = ttk.Label(ctrl_frame, text="就绪", width=50)
         self.status_label.pack(side=tk.LEFT, padx=5)
 
         # 软件选择组件
@@ -272,7 +272,7 @@ class VisioConverterApp:
                 self.root.after(
                     0,
                     lambda: self.status_label.config(
-                        text=f"正在处理：{current_file} ({current}/{total})"
+                        text=f"正在处理：({current}/{total}) {current_file}"
                     ),
                 )
 
@@ -307,7 +307,7 @@ class VisioConverterApp:
             )
         except Exception as e:
             # DEBUG
-            raise e
+            # raise e
             error_msg = str(e)
             self.root.after(
                 0,
